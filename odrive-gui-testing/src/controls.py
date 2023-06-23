@@ -8,6 +8,7 @@ import odrive.utils as utils
 import asyncio
 import time
 from typing import List
+import threading
 
 def controls(odrv):
     modes = {
@@ -33,13 +34,12 @@ def controls(odrv):
         8: 'loop',
     }
 
-    # New function to save data as CSV
-    recording = False  # Flag to indicate if data recording is active
-    start_time = None  # Timestamp when recording started
-    data_buffer = []  # Buffer to store recorded data
+    recording = False
+    start_time = None
+    data_buffer = []
 
     def record_data():
-        nonlocal recording, start_time
+        global recording, start_time, data_buffer
 
         if recording:
             # Stop recording
@@ -51,48 +51,48 @@ def controls(odrv):
             # Start recording
             recording = True
             start_time = datetime.now()
-            recording_data()
+            data_buffer = []
             print("Started recording.")
-
-    #Implement save start and save end
-    def recording_data():
-        global data_buffer
-        # Get the current timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Get the velocity data points, i_g, i_d, and i_bus
-        velocity = odrv.Encoder.vel_estimate
-        i_g = odrv.motor.CurrentControl.Iq_measured
-        i_d = odrv.motor.CurrentControl.Id_measured
-        i_bus = odrv.ibus
-
-        # Append the data to the buffer
-        data_buffer.append([timestamp, velocity, i_g, i_d, i_bus])
-    ui.markdown('## ODrive GUI')
+            thread = threading.Thread(target=recording_data)
+            thread.start()
 
     def save_data():
         global data_buffer
 
         if len(data_buffer) > 0:
-            # Get the file name based on the current timestamp
-            file_name = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.csv")
+            filename = f"recorded_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            with open(filename, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(['Timestamp', 'Velocity', 'I_G', 'I_D', 'I_Bus'])
+                writer.writerows(data_buffer)
 
-            # Save the data to a CSV file
-            with open(file_name, mode='w', newline='') as file:
-                writer = csv.writer(file)
-                writer.writerow(['Timestamp', 'Velocity', 'I_g', 'I_d', 'I_bus'])  # Write the header
-                writer.writerows(data_buffer)  # Write the data rows
+            print(f"Data saved to {filename}")
+        else:
+            print("No data to save.")
 
-            # Clear the data buffer
-            data_buffer = []
+    def recording_data():
+        global recording, data_buffer
+
+        while recording:
+            # Collect data and add it to the buffer
+            timestamp = datetime.now()
+            velocity = odrv.axis0.encoder.vel_estimate
+            i_g = odrv.axis0.motor.current_control.Iq_measured
+            i_d = odrv.axis0.motor.current_control.Id_measured
+            i_bus = odrv.ibus
+
+            data_point = [timestamp, velocity, i_g, i_d, i_bus]
+            data_buffer.append(data_point)
+
+            # Adjust the sleep duration based on the desired data collection rate
+            time.sleep(0.01)  # Adjust the sleep duration as needed
+    #Implement save start and save end
+
     #Potential for input speeds through txt file or someother
 
     from typing import List
 
     def format_errors(odrv, clear=False) -> str:
-        is_legacy_firmware = (odrv.fw_version_major, odrv.fw_version_minor, odrv.fw_version_revision) <= (0, 5, 4)
-        '''if is_legacy_firmware:
-            return odrive.legacy.format_errors(odrv, clear)'''
 
         lines = []
 
@@ -169,8 +169,9 @@ def controls(odrv):
         axis.requested_state = enums.AxisState.FULL_CALIBRATION_SEQUENCE
 
     def start_calibration():
-        axis_calibration(odrv.axis0)
-        time.sleep(30)
+        print(odrv.axis0)
+        #axis_calibration(odrv.axis0)
+        #time.sleep(30)
         axis_calibration(odrv.axis1)
         time.sleep(30)
 
@@ -306,7 +307,7 @@ def controls(odrv):
             vel_plot.push([datetime.now()], [[axis.controller.input_vel], [axis.encoder.vel_estimate]])
             await vel_plot.view.update()
         vel_check = ui.checkbox('Velocity plot')
-        vel_plot = ui.line_plot(n=2, update_every=5).with_legend(['input_vel', 'vel_estimate'], loc='upper left', ncol=2)
+        vel_plot = ui.line_plot(n=2, update_every=100).with_legend(['input_vel', 'vel_estimate'], loc='upper left', ncol=2)
         vel_timer = ui.timer(0.05, vel_push)
         vel_check.bind_value_to(vel_plot, 'visible').bind_value_to(vel_timer, 'active')
 
@@ -314,7 +315,7 @@ def controls(odrv):
             id_plot.push([datetime.now()], [[axis.motor.current_control.Id_setpoint], [axis.motor.current_control.Id_measured]])
             await id_plot.view.update()
         id_check = ui.checkbox('Id plot')
-        id_plot = ui.line_plot(n=2, update_every=10).with_legend(['Id_setpoint', 'Id_measured'], loc='upper left', ncol=2)
+        id_plot = ui.line_plot(n=2, update_every=100).with_legend(['Id_setpoint', 'Id_measured'], loc='upper left', ncol=2)
         id_timer = ui.timer(0.05, id_push)
         id_check.bind_value_to(id_plot, 'visible').bind_value_to(id_timer, 'active')
 
@@ -322,7 +323,7 @@ def controls(odrv):
             iq_plot.push([datetime.now()], [[axis.motor.current_control.Iq_setpoint], [axis.motor.current_control.Iq_measured]])
             await iq_plot.view.update()
         iq_check = ui.checkbox('Iq plot')
-        iq_plot = ui.line_plot(n=2, update_every=10).with_legend(['Iq_setpoint', 'Iq_measured'], loc='upper left', ncol=2)
+        iq_plot = ui.line_plot(n=2, update_every=100).with_legend(['Iq_setpoint', 'Iq_measured'], loc='upper left', ncol=2)
         iq_timer = ui.timer(0.05, iq_push)
         iq_check.bind_value_to(iq_plot, 'visible').bind_value_to(iq_timer, 'active')
 
@@ -330,7 +331,7 @@ def controls(odrv):
             t_plot.push([datetime.now()], [[axis.motor.fet_thermistor.temperature]])
             await t_plot.view.update()
         t_check = ui.checkbox('Temperature plot')
-        t_plot = ui.line_plot(n=1, update_every=10)
+        t_plot = ui.line_plot(n=1, update_every=100)
         t_timer = ui.timer(0.05, t_push)
         t_check.bind_value_to(t_plot, 'visible').bind_value_to(t_timer, 'active')
 

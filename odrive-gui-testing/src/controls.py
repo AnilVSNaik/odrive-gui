@@ -148,10 +148,43 @@ def controls(odrv):
     def axis_column(a: int, axis: Any) -> None:
         ui.markdown(f'### Axis {a}')
 
+        state = ui.label()
         power = ui.label()
         ui.timer(0.1, lambda: power.set_text(
-            f'{axis.motor.current_control.Iq_measured * axis.motor.current_control.v_current_control_integral_q:.1f} W'))
+            f'{axis.motor.current_control.Iq_measured * axis.motor.current_control.v_current_control_integral_q:.1f} W}'))
+        ui.timer(0.1, lambda: state.set_text(
+            f'State - {axis_state_check(axis)} ({axis.current_state})'
+        )
 
+        def axis_state_check(axis):
+            if axis.current_state == 0:
+                x='Undefined'
+            elif axis.current_state == 1:
+                x='Idle'
+            elif axis.current_state == 2:
+                x='Startup Sequence'
+            elif axis.current_state == 3:
+                x='Full Calibration Sequence'
+            elif axis.current_state == 4:
+                x='Motor Calibration'
+            elif axis.current_state == 6
+                x = 'Encoder Index Search'
+            elif axis.current_state == 7:
+                x = 'Encoder Offset Calibration'
+            elif axis.current_state ==  8:
+                x = 'Closed Loop Control'
+            elif axis.current_state == 9:
+                x = 'Lock in Spin'
+            elif axis.current_state == 10:
+                x = 'Encoder Dir Find'
+            elif axis.current_state == 11:
+                x = 'Homing'
+            elif axis.current_state == 12:
+                x = 'Encoder Hall Polarity Calibration'
+            elif axis.current_state == 13:
+                x = 'Encoder Hall Phase Calibration'
+
+            return x
         ctr_cfg = axis.controller.config
         mtr_cfg = axis.motor.config
         enc_cfg = axis.encoder.config
@@ -237,91 +270,90 @@ def controls(odrv):
                 .bind_visibility_from(input_mode, 'value', value=7)
 
         #Allows us to Show the graphs of position, velocity, torque and current
-    async def pos_push() -> None:
-        #Allows for the actual recording of the values while other processes take place. All these datapoints are recorded and appended to an empty data buffe which we will then save.
-        if recording:
-            timestamp = datetime.now()
-            velocity = axis.encoder.vel_estimate
-            i_g = axis.motor.current_control.Iq_measured
-            i_d = axis.motor.current_control.Id_measured
-            i_bus = axis.motor.current_control.Ibus
+        async def pos_push() -> None:
+            #Allows for the actual recording of the values while other processes take place. All these datapoints are recorded and appended to an empty data buffe which we will then save.
+            if recording:
+                timestamp = datetime.now()
+                velocity = axis.encoder.vel_estimate
+                i_g = axis.motor.current_control.Iq_measured
+                i_d = axis.motor.current_control.Id_measured
+                i_bus = axis.motor.current_control.Ibus
 
-            data_row = [timestamp, velocity, i_g, i_d, i_bus]
-            data_buffer.append(data_row)
+                data_row = [timestamp, velocity, i_g, i_d, i_bus]
+                data_buffer.append(data_row)
 
-        pos_plot.push([datetime.now()], [[axis.controller.input_pos], [axis.encoder.pos_estimate]])
+            pos_plot.push([datetime.now()], [[axis.controller.input_pos], [axis.encoder.pos_estimate]])
 
-        await pos_plot.view.update()
+            await pos_plot.view.update()
 
 
-    #All the options for the plots
-    async def vel_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
-        if custom_range_checkbox.value is True:
-            print('Enters if statement --------------------------------------------------------')
-            print(vel_plot.view)
-            print('Goes through whole print statement ------------------------------------------')
-        else:
-            pass
-        vel_plot.push([datetime.now()], [[axis.controller.input_vel], [axis.encoder.vel_estimate]])
-        await vel_plot.view.update()
+        #All the options for the plots
+        async def vel_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
+            #ax = vel_plot.view.get_axes()
+            '''if custom_range_checkbox.value is True:
+                ax[0].set_ylim(*y_axis_range)
+            else:
+                pass'''
+            vel_plot.push([datetime.now()], [[axis.controller.input_vel], [axis.encoder.vel_estimate]])
+            await vel_plot.view.update()
 
-    async def id_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
-        #ax = id_plot.view.ax
-        #ax.set_ylim(*y_axis_range)
-        id_plot.push([datetime.now()], [[axis.motor.current_control.Id_setpoint], [axis.motor.current_control.Id_measured]])
-        await id_plot.view.update()
+        async def id_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
+            #ax = id_plot.view.ax
+            #ax.set_ylim(*y_axis_range)
+            id_plot.push([datetime.now()], [[axis.motor.current_control.Id_setpoint], [axis.motor.current_control.Id_measured]])
+            await id_plot.view.update()
 
-    async def iq_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
-        #ax = iq_plot.view.ax
-        #ax.set_ylim(*y_axis_range)
-        iq_plot.push([datetime.now()], [[axis.motor.current_control.Iq_setpoint], [axis.motor.current_control.Iq_measured]])
-        await iq_plot.view.update()
+        async def iq_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
+            #ax = iq_plot.view.ax
+            #ax.set_ylim(*y_axis_range)
+            iq_plot.push([datetime.now()], [[axis.motor.current_control.Iq_setpoint], [axis.motor.current_control.Iq_measured]])
+            await iq_plot.view.update()
 
-    async def t_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
-        #ax = t_plot.view.ax
-        #ax.set_ylim(*y_axis_range)
-        t_plot.push([datetime.now()], [[axis.motor.fet_thermistor.temperature]])
-        await t_plot.view.update()
+        async def t_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
+            #ax = t_plot.view.ax
+            #ax.set_ylim(*y_axis_range)
+            t_plot.push([datetime.now()], [[axis.motor.fet_thermistor.temperature]])
+            await t_plot.view.update()
 
-    async def update_y_axis_range(min, max):
-        vel_push([min, max])
-        #iq_push(min, max)
-        #id_push(min, max)
-        #t_push(min, max)
+        async def update_y_axis_range(min, max):
+            vel_push([min, max])
+            #iq_push(min, max)
+            #id_push(min, max)
+            #t_push(min, max)
 
-    custom_range_checkbox = ui.checkbox('Custom Y-Axis Range')
-    custom_y_min = ui.number('Y-Min', value=0).bind_visibility_from(custom_range_checkbox, 'value')
-    custom_y_max = ui.number('Y-Max', value=10).bind_visibility_from(custom_range_checkbox, 'value')
-    custom_range_button = ui.button('Set range', on_click=update_y_axis_range(custom_y_min, custom_y_max)).bind_visibility_from(custom_range_checkbox, 'value')
-    # Set the default value of the checkbox to False (no custom range)
-    custom_range_checkbox.value = False
+        '''custom_range_checkbox = ui.checkbox('Custom Y-Axis Range')
+        custom_y_min = ui.number('Y-Min', value=0).bind_visibility_from(custom_range_checkbox, 'value')
+        custom_y_max = ui.number('Y-Max', value=10).bind_visibility_from(custom_range_checkbox, 'value')
+        custom_range_button = ui.button('Set range', on_click=update_y_axis_range(custom_y_min, custom_y_max)).bind_visibility_from(custom_range_checkbox, 'value')
+        # Set the default value of the checkbox to False (no custom range)
+        custom_range_checkbox.value = False'''
 
-    #Characteristics of the plots
-    with ui.row():
-        pos_check = ui.checkbox('Position plot')
-        pos_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['input_pos', 'pos_estimate'], loc='upper left', ncol=2)
-        pos_timer = ui.timer(0.05, pos_push)
-        pos_check.bind_value_to(pos_plot, 'visible').bind_value_to(pos_timer, 'active')
+        #Characteristics of the plots
+        with ui.row():
+            pos_check = ui.checkbox('Position plot')
+            pos_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['input_pos', 'pos_estimate'], loc='upper left', ncol=2)
+            pos_timer = ui.timer(0.05, pos_push)
+            pos_check.bind_value_to(pos_plot, 'visible').bind_value_to(pos_timer, 'active')
 
-        vel_check = ui.checkbox('Velocity plot')
-        vel_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['input_vel', 'vel_estimate'], loc='upper left', ncol=2)
-        vel_timer = ui.timer(0.05, vel_push)
-        vel_check.bind_value_to(vel_plot, 'visible').bind_value_to(vel_timer, 'active')
+            vel_check = ui.checkbox('Velocity plot')
+            vel_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['input_vel', 'vel_estimate'], loc='upper left', ncol=2)
+            vel_timer = ui.timer(0.05, vel_push)
+            vel_check.bind_value_to(vel_plot, 'visible').bind_value_to(vel_timer, 'active')
 
-        id_check = ui.checkbox('Id plot')
-        id_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['Id_setpoint', 'Id_measured'], loc='upper left', ncol=2)
-        id_timer = ui.timer(0.05, id_push)
-        id_check.bind_value_to(id_plot, 'visible').bind_value_to(id_timer, 'active')
+            id_check = ui.checkbox('Id plot')
+            id_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['Id_setpoint', 'Id_measured'], loc='upper left', ncol=2)
+            id_timer = ui.timer(0.05, id_push)
+            id_check.bind_value_to(id_plot, 'visible').bind_value_to(id_timer, 'active')
 
-        iq_check = ui.checkbox('Iq plot')
-        iq_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['Iq_setpoint', 'Iq_measured'], loc='upper left', ncol=2)
-        iq_timer = ui.timer(0.05, iq_push)
-        iq_check.bind_value_to(iq_plot, 'visible').bind_value_to(iq_timer, 'active')
+            iq_check = ui.checkbox('Iq plot')
+            iq_plot = ui.line_plot(n=2, update_every=0.125).with_legend(['Iq_setpoint', 'Iq_measured'], loc='upper left', ncol=2)
+            iq_timer = ui.timer(0.05, iq_push)
+            iq_check.bind_value_to(iq_plot, 'visible').bind_value_to(iq_timer, 'active')
 
-        t_check = ui.checkbox('Temperature plot')
-        t_plot = ui.line_plot(n=1, update_every=0.125)
-        t_timer = ui.timer(0.05, t_push)
-        t_check.bind_value_to(t_plot, 'visible').bind_value_to(t_timer, 'active')
+            t_check = ui.checkbox('Temperature plot')
+            t_plot = ui.line_plot(n=1, update_every=0.125)
+            t_timer = ui.timer(0.05, t_push)
+            t_check.bind_value_to(t_plot, 'visible').bind_value_to(t_timer, 'active')
 
     with ui.row():
         for a, axis in enumerate([odrv.axis0, odrv.axis1]):

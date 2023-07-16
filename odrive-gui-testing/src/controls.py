@@ -153,8 +153,7 @@ def controls(odrv):
         ui.timer(0.1, lambda: power.set_text(
             f'{axis.motor.current_control.Iq_measured * axis.motor.current_control.v_current_control_integral_q:.1f} W}'))
         ui.timer(0.1, lambda: state.set_text(
-            f'State - {axis_state_check(axis)} ({axis.current_state})'
-        )
+            f'State - {axis_state_check(axis)} ({axis.current_state})'))
 
         def axis_state_check(axis):
             if axis.current_state == 0:

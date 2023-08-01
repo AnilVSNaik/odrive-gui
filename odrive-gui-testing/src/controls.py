@@ -80,13 +80,14 @@ def controls(odrv):
 
     def recording_data():
         global recording, data_buffer
-        #Set for a set interval between data recording
-        sample_interval = 0.001  # Set the desired sample interval in seconds
-        next_sample_time = time.perf_counter() + sample_interval
+        sample_interval = 0.00001  # Set the desired sample interval in seconds
+        next_sample_time = time.monotonic() + sample_interval
 
         while recording:
+            start_time = time.time()  # Record the start time for each sample
+
             # Collect data and add it to the buffer
-            timestamp = datetime.now()
+            timestamp = datetime.now().strftime("%H:%M:%S.%f")
             velocity_0 = odrv.axis0.encoder.vel_estimate
             velocity_1 = odrv.axis1.encoder.vel_estimate
             i_g_0 = odrv.axis0.motor.current_control.Iq_measured
@@ -98,17 +99,21 @@ def controls(odrv):
             data_point = [timestamp, velocity_1, i_g_1, i_d_1, velocity_0, i_g_0, i_d_0, i_bus]
             data_buffer.append(data_point)
 
-            # Calculate the delay until the next sample time
-            delay = next_sample_time - time.perf_counter()
+            elapsed_time = time.monotonic() - start_time
+            remaining_time = next_sample_time - time.monotonic()
 
-            if delay > 0:
-                time.sleep(delay)  # Wait for the remaining time until the next sample
-
+            if remaining_time > 0:
+                time.sleep(remaining_time)  # Wait for the remaining time until the next sample
             else:
-                # If the delay is negative (sampling took longer than expected), print a warning
+                # If the sampling took longer than the desired interval, print a warning
                 print("Warning: Sampling took longer than the desired interval.")
 
+            # Adjust the next sample time to account for the actual elapsed time
             next_sample_time += sample_interval
+
+            # If the sampling took longer than the desired interval, update the next sample time
+            if elapsed_time > sample_interval:
+                next_sample_time = time.monotonic() + sample_interval
 
     def show_errors():
         errors = str(utils.format_errors(odrv, True))# Get the errors from the ODrive in format but in rich text converted to str
@@ -118,16 +123,14 @@ def controls(odrv):
     def axis_calibration(axis):
         axis.requested_state = enums.AxisState.IDLE
         axis.requested_state = enums.AxisState.FULL_CALIBRATION_SEQUENCE
-
+        while axis.current_state != enums.AxisState.IDLE: #Will check if the motor is idle, if is the time.sleep(1) will stop
+            time.sleep(1)
     #Ensures nothing else interrupts the Axis calibration during use
     def start_calibration_0():
         axis_calibration(odrv.axis0)
-        while odrv.axis0.current_state != enums.AxisState.IDLE: #Will check if the motor is idle, if is the time.sleep(1) will stop
-            time.sleep(1)
+
     def start_calibration_1():
         axis_calibration(odrv.axis1)
-        while odrv.axis1.current_state != enums.AxisState.IDLE:
-            time.sleep(1)
 
     #All components at the top page of the GUI
     with ui.row().classes('items-center'):
@@ -141,9 +144,10 @@ def controls(odrv):
         recording_button = ui.button("Start Recording", on_click=record_data).props('icon=record_voice_over flat round')
         ui.button("Show Errors", on_click=show_errors).props('icon=bug_report flat round')
         error_output = ui.markdown()  # Create an output widget for displaying errors
+
+    with ui.row().classes('items-center'):
         ui.button("Axis 0 Calibration", on_click=lambda: start_calibration_0()).props('icon=build')
         ui.button("Axis 1 Calibration", on_click=lambda: start_calibration_1()).props('icon=build')
-
     #Method to bind each button to a function and return commands to the motor controller. Also allows to display important information of the motor
     def axis_column(a: int, axis: Any) -> None:
         ui.markdown(f'### Axis {a}')
@@ -151,26 +155,34 @@ def controls(odrv):
         state = ui.label()
         power = ui.label()
         ui.timer(0.1, lambda: power.set_text(
-            f'{axis.motor.current_control.Iq_measured * axis.motor.current_control.v_current_control_integral_q:.1f} W}'))
+            f'{axis.motor.current_control.Iq_measured * axis.motor.current_control.v_current_control_integral_q:.1f} W'))
         ui.timer(0.1, lambda: state.set_text(
             f'State - {axis_state_check(axis)} ({axis.current_state})'))
 
+        async def update_y_axis_range(min, max):
+            y_axis_range = [min, max]
+            print(y_axis_range)
+            await vel_push(y_axis_range)
+            # iq_push(min, max)
+            # id_push(min, max)
+            # t_push(min, max)
+
         def axis_state_check(axis):
             if axis.current_state == 0:
-                x='Undefined'
+                x = 'Undefined'
             elif axis.current_state == 1:
-                x='Idle'
+                x = 'Idle'
             elif axis.current_state == 2:
-                x='Startup Sequence'
+                x = 'Startup Sequence'
             elif axis.current_state == 3:
-                x='Full Calibration Sequence'
+                x = 'Full Calibration Sequence'
             elif axis.current_state == 4:
-                x='Motor Calibration'
-            elif axis.current_state == 6
+                x = 'Motor Calibration'
+            elif axis.current_state == 6:
                 x = 'Encoder Index Search'
             elif axis.current_state == 7:
                 x = 'Encoder Offset Calibration'
-            elif axis.current_state ==  8:
+            elif axis.current_state == 8:
                 x = 'Closed Loop Control'
             elif axis.current_state == 9:
                 x = 'Lock in Spin'
@@ -184,6 +196,7 @@ def controls(odrv):
                 x = 'Encoder Hall Phase Calibration'
 
             return x
+
         ctr_cfg = axis.controller.config
         mtr_cfg = axis.motor.config
         enc_cfg = axis.encoder.config
@@ -288,11 +301,6 @@ def controls(odrv):
 
         #All the options for the plots
         async def vel_push(y_axis_range: Optional[Tuple[float, float]] = None) -> None:
-            #ax = vel_plot.view.get_axes()
-            '''if custom_range_checkbox.value is True:
-                ax[0].set_ylim(*y_axis_range)
-            else:
-                pass'''
             vel_plot.push([datetime.now()], [[axis.controller.input_vel], [axis.encoder.vel_estimate]])
             await vel_plot.view.update()
 
@@ -314,11 +322,6 @@ def controls(odrv):
             t_plot.push([datetime.now()], [[axis.motor.fet_thermistor.temperature]])
             await t_plot.view.update()
 
-        async def update_y_axis_range(min, max):
-            vel_push([min, max])
-            #iq_push(min, max)
-            #id_push(min, max)
-            #t_push(min, max)
 
         '''custom_range_checkbox = ui.checkbox('Custom Y-Axis Range')
         custom_y_min = ui.number('Y-Min', value=0).bind_visibility_from(custom_range_checkbox, 'value')
@@ -358,6 +361,7 @@ def controls(odrv):
         for a, axis in enumerate([odrv.axis0, odrv.axis1]):
             with ui.card(), ui.column():
                 axis_column(a, axis)
+
 
 
 

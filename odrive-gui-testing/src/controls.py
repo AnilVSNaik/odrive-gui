@@ -117,6 +117,16 @@ def controls(odrv):
 
     def show_errors():
         errors = str(utils.format_errors(odrv, True))# Get the errors from the ODrive in format but in rich text converted to str
+        # This would print fine in a console, but it's not really markdown-compatible yet (it'll print in a single line)
+        # It is an indented list. To be markdown-compatible we need to add list points while respecting the indentation.
+        errors = errors.splitlines()
+        for i, e in enumerate(errors):
+            # There might be a more pythonic way for separating the whitespace padding, but I couldn't think of one...
+            j = 0
+            while e[j].isspace():
+                j += 1
+            errors[i] = e[:j] + "- " + e[j:]
+        errors = "\n".join(errors)
         error_output.set_content(errors)  # Update the output widget with the error information
 
     #Axis Calibration sequence start
@@ -143,6 +153,8 @@ def controls(odrv):
         ui.button(on_click=lambda: odrv.save_configuration()).props('icon=save flat round').tooltip('Save configuration')
         recording_button = ui.button("Start Recording", on_click=record_data).props('icon=record_voice_over flat round')
         ui.button("Show Errors", on_click=show_errors).props('icon=bug_report flat round')
+    # Print errors below the top line of components.
+    with ui.row().classes('items-center'):
         error_output = ui.markdown()  # Create an output widget for displaying errors
 
     with ui.row().classes('items-center'):

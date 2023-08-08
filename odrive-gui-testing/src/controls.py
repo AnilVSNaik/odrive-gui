@@ -119,13 +119,16 @@ def controls(odrv):
         errors = str(utils.format_errors(odrv, True))# Get the errors from the ODrive in format but in rich text converted to str
         # This would print fine in a console, but it's not really markdown-compatible yet (it'll print in a single line)
         # It is an indented list. To be markdown-compatible we need to add list points while respecting the indentation.
+        # Additionally, the list elements can contain markdown characters which need to be escaped. However,
+        # escaping f.ex. ABC_DEF => ABC\_DEF doesn't seem to work. therefore format each list entry as code with `...`
         errors = errors.splitlines()
         for i, e in enumerate(errors):
             # There might be a more pythonic way for separating the whitespace padding, but I couldn't think of one...
             j = 0
             while e[j].isspace():
                 j += 1
-            errors[i] = e[:j] + "- " + e[j:]
+            errors[i] = f"{e[:j]}- `{e[j:]}`"
+
         errors = "\n".join(errors)
         error_output.set_content(errors)  # Update the output widget with the error information
 

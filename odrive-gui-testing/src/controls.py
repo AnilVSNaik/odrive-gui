@@ -116,6 +116,13 @@ def controls(odrv):
                 next_sample_time = time.monotonic() + sample_interval
 
     def show_errors():
+        # Toggle error content. If errors are already displayed, hide them...
+        if error_output.visible:
+            error_output.visible = False
+            return
+        # ... else show them.
+        error_output.visible = True
+
         errors = str(utils.format_errors(odrv, True))# Get the errors from the ODrive in format but in rich text converted to str
         # This would print fine in a console, but it's not really markdown-compatible yet (it'll print in a single line)
         # It is an indented list. To be markdown-compatible we need to add list points while respecting the indentation.
@@ -156,6 +163,7 @@ def controls(odrv):
     # Print errors below the top line of components.
     with ui.row().classes('items-center'):
         error_output = ui.markdown()  # Create an output widget for displaying errors
+        error_output.visible = False  # See show_errors for details
 
     with ui.row().classes('items-center'):
         ui.button("Axis 0 Calibration", on_click=lambda: start_calibration_0()).props('icon=build')

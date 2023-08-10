@@ -68,7 +68,7 @@ def controls(odrv):
         global data_buffer
 
         if len(data_buffer) > 0:
-            filename = f"recorded_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = f"recorded_data_{datetime.now().strftime('%Y.%m.%dT%H%M%S')}.csv"
             with open(filename, 'w', newline='') as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerow(['Timestamp', 'Velocity Axis 1', 'I_G Axis 1', 'I_D Axis 1','Velocity Axis 0', 'I_G Axis 0', 'I_D Axis 0', 'I_Bus'])
@@ -82,12 +82,12 @@ def controls(odrv):
         global recording, data_buffer
         sample_interval = 0.00001  # Set the desired sample interval in seconds
         next_sample_time = time.monotonic() + sample_interval
-
+        starting_time =time.monotonic()
         while recording:
-            start_time = time.time()  # Record the start time for each sample
+            start_time = time.monotonic()  # Record the start time for each sample
 
             # Collect data and add it to the buffer
-            timestamp = datetime.now().strftime("%H:%M:%S.%f")
+            timestamp = time.monotonic()-starting_time
             velocity_0 = odrv.axis0.encoder.vel_estimate
             velocity_1 = odrv.axis1.encoder.vel_estimate
             i_g_0 = odrv.axis0.motor.current_control.Iq_measured

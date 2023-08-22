@@ -7,13 +7,13 @@ It also comes packaged in a Docker image for easy usage.
 
 ## Usage
 
-Install required packages
+Install required packages through a terminal
 
 ```bash
 python3 -m pip install requirements.txt
 ```
 
-and start the app:
+and start the app in a terminal:
 
 ```bash
 python3 src/main.py
